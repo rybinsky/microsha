@@ -68,28 +68,59 @@ void loop() {
 			}
 		}
 		if(!getline(cin,Line) ) { Stop = 1; }
-		
+		if (Line.size() == 0) continue;
 		line = (char*)malloc((Line.length() + 1) * sizeof(char));
+		//cout<<"line"<<" "<<(Line.length() + 1)<<"bytes"<<' '<<(void*)line<<endl;//выделил память под строку line
         strcpy(line, Line.c_str());
 
-		if (Line.size() == 0) continue;
-		pair<char**, int> Tokens = Parse_Line(line);
-		args = Tokens.first;
-		CountArgs = Tokens.second;
+		//pair<char**, int> Tokens = Parse_Line(line);
+		//args = Tokens.first;
+		//CountArgs = Tokens.second;
+		string buf; 
+		stringstream ss(line);
+		vector<char*> tokens;
+		char *temp;
 
-		Execution(args[0],args, CountArgs, Stop);
-		//cout<<"Success"<<endl;
-		free(line);
-		//cout<<"Line empty"<< endВl;
-		for(int i = 0; i < CountArgs; i++) {
-			free(args[i]);
+		while (ss >> buf) {
+			temp = (char*)malloc((buf.length() + 1) * sizeof(char));
+			//cout<<"temp"<<" "<<(buf.length() + 1)<<"bytes"<<' '<<(void*)temp<<endl;
+			//выделяю память под один токен, всегда разной длины, тк buf разный
+			strcpy(temp,buf.c_str());
+			tokens.push_back(temp);
+			//cout<<temp<<' '<<&temp<<endl;
 		}
-		//cout<<"Args empty"<<endl;
+		char** argv = (char	**)malloc((tokens.size() + 1) * sizeof(char*));
+		//cout<<"argv"<<" "<<(tokens.size() + 1)<<"bytes"<<' '<<(void*)argv<<endl;
+		//выделил память t.size()+1 под массив указателей
+		for (int i = 0; i < tokens.size(); i++ ) {
+			argv[i] = tokens[i];
+			//cout<<argv[i]<< ' '<<&argv[i]<<endl;
+			//cout<<tokens[i]<<' '<<&tokens[i]<<endl;
+		}
+		//cout<< temp << &temp << endl;
+		argv[tokens.size()] = NULL;//последний t.size + 1-й элемент на NULL
+		//cout<<"last NULL address "<< (void*)argv[tokens.size()]<<endl;
+		CountArgs = tokens.size();
+		//cout<<"CountArgs="<<CountArgs<<endl;
+		args = argv;
+		//cout<<temp<<' '<<&temp<<endl;
+		Execution(args[0],args, CountArgs, Stop);
+		cout<<"Success"<<endl;
+		//cout<<line<<' ';
+		free(line);//очистил строку lline
+		//cout<<(void*)line<<endl;
+		//cout<<"Line empty"<< endl;
+		for(int i = 0; i < CountArgs + 1; i++) {
+			//cout<<"args[i]"<<' '<<(void*)args[i]<<endl;
+			if (args[i] != NULL) free(args[i]);//очищаю по кажд указ из массива
+		}//очистил t.size элементов, если пропиу еще +1, то ничего не изм-ся
+		//cout<<"argv"<<' '<<(void*)argv<<endl;
+		free(args);//очистил массив указателей
+		cout<<"Args empty"<<endl;
 	}
 }
 //=====================================================//
 pair<char**, int> Parse_Line(char* line) {
-	int i = 0;
     string buf; 
     stringstream ss(line);
     vector<char*> tokens;
@@ -150,13 +181,16 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
     }
 
 	if (pipes) {
+		//cout<<"piper in Exec"<<endl;
 		for(int i = 0; i < argnum; i++) {
 			if(strcmp(args[i], "|") == 0) {
-               	args[i] = NULL;
+				//free(args[i]);
+               	//args[i] = NULL;
                 char* right[argnum - i];
                 int c = 0;
                 for(int j = i; j < argnum - 1; j++) {
 	                right[j - i] = args[j + 1];
+					//cout<< right[j - i]<<endl;
                     c++;
                 }
                 right[c] = NULL;
@@ -166,6 +200,7 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
                 if(lpid == 0){//left (child)
 					dup2(2,1);
                     dup2(p[1], STDOUT_FILENO);
+					//cout<<"0000000"<<endl;
                     execvp(cmd, args);
                 }
                 else {//right (parent)
@@ -174,6 +209,7 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
 					if(rpid == 0){ //right child
 						dup2(2,1);
                     	dup2(p[0], STDIN_FILENO);
+
                     	Piper(right[0], right, c, Stop);
 						close(p[1]);
 					} else { //parent
@@ -212,17 +248,22 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
                         close(1);
                         dup(newstdout);
                         close(newstdout);
-                        args[i] = NULL;
+						//free(args[i]);
+                        //args[i] = NULL;
                     }
                     else if(strcmp(args[i], "<") == 0){
+						//cout<<")))<((("<<endl;
                         int newstdin = open(args[i+1], O_RDONLY);
+						//cout<<"((()))"<<endl;
                         close(0);
                     	dup(newstdin);
                     	close(newstdin);
-                        args[i] = NULL;
+						//free(args[i]);
+                        //args[i] = NULL;
                     }
                 }
         		execvp(cmd, args);
+				//cout<<"Perrorrrrrrrrrrrrrrrrrrrrrrrrrr"<<endl;
         		perror(cmd); //when there is an error
 				Stop = 1;
       		}
@@ -238,7 +279,7 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
 //=====================================================//
 void Piper(char *cmd,char* args[], int argnum, int& Stop) {
     int pipes = 0;
-
+	//cout<<"PIPER"<<endl;
     for(int i = 0; i < argnum; i++){
         if(strcmp(args[i], "|") == 0) {pipes = 1; }
     }
@@ -246,11 +287,13 @@ void Piper(char *cmd,char* args[], int argnum, int& Stop) {
 	if(pipes) {
         for(int i = 0; i < argnum; i++){
                 if(strcmp(args[i], "|") == 0){
-                        args[i] = NULL;
+						//free(args[i]);
+                        //args[i] = NULL;
                         char* right[argnum - i];
                         int c = 0;
                         for(int j = i; j < argnum - 1; j++){
                                 right[j - i] = args[j + 1];
+								//cout<< right[j - i]<<endl;
                                 c++;
                         }
                         right[c] = NULL;
@@ -305,17 +348,21 @@ void Piper(char *cmd,char* args[], int argnum, int& Stop) {
                                         close(1);
                                         dup(newstdout);
                                         close(newstdout);
-                                        args[i] = NULL;
+										//free(args[i]);
+                                        //args[i] = NULL;
                                 }
                                 else if(strcmp(args[i], "<") == 0){
+										//cout<<")))<((("<<endl;
                                         int newstdin = open(args[i + 1], O_RDONLY);
                                         close(0);
                                         dup(newstdin);
                                         close(newstdin);
-                                        args[i] = NULL;
+										//free(args[i]);
+                                        //args[i] = NULL;
                                 }
                         }
                         execvp(cmd, args);
+						//cout<<"Perrorrrrrrrrrrrrrrrrrrrrrrrrrr"<<endl;
                         perror(cmd); //when there is an error
 						Stop = 1;
             }
@@ -328,6 +375,7 @@ void Piper(char *cmd,char* args[], int argnum, int& Stop) {
             
         }
     }
+	//cout<<"End PIPER"<<endl;
 	Stop = 1;
 }
 //=====================================================//
