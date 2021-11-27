@@ -105,7 +105,7 @@ void loop() {
 		args = argv;
 		//cout<<temp<<' '<<&temp<<endl;
 		Execution(args[0],args, CountArgs, Stop);
-		cout<<"Success"<<endl;
+		//cout<<"Success"<<endl;
 		//cout<<line<<' ';
 		free(line);//очистил строку lline
 		//cout<<(void*)line<<endl;
@@ -116,7 +116,7 @@ void loop() {
 		}//очистил t.size элементов, если пропиу еще +1, то ничего не изм-ся
 		//cout<<"argv"<<' '<<(void*)argv<<endl;
 		free(args);//очистил массив указателей
-		cout<<"Args empty"<<endl;
+		//cout<<"Args empty"<<endl;
 	}
 }
 //=====================================================//
