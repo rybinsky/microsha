@@ -184,8 +184,8 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
 		//cout<<"piper in Exec"<<endl;
 		for(int i = 0; i < argnum; i++) {
 			if(strcmp(args[i], "|") == 0) {
-				//free(args[i]);
-               	//args[i] = NULL;
+				free(args[i]);
+               	args[i] = NULL;
                 char* right[argnum - i];
                 int c = 0;
                 for(int j = i; j < argnum - 1; j++) {
@@ -248,8 +248,8 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
                         close(1);
                         dup(newstdout);
                         close(newstdout);
-						//free(args[i]);
-                        //args[i] = NULL;
+						free(args[i]);
+                        args[i] = NULL;
                     }
                     else if(strcmp(args[i], "<") == 0){
 						//cout<<")))<((("<<endl;
@@ -258,8 +258,8 @@ void Execution(char* cmd, char* args[], int argnum, int& Stop) {
                         close(0);
                     	dup(newstdin);
                     	close(newstdin);
-						//free(args[i]);
-                        //args[i] = NULL;
+						free(args[i]);
+                        args[i] = NULL;
                     }
                 }
         		execvp(cmd, args);
@@ -287,8 +287,8 @@ void Piper(char *cmd,char* args[], int argnum, int& Stop) {
 	if(pipes) {
         for(int i = 0; i < argnum; i++){
                 if(strcmp(args[i], "|") == 0){
-						//free(args[i]);
-                        //args[i] = NULL;
+						free(args[i]);
+                        args[i] = NULL;
                         char* right[argnum - i];
                         int c = 0;
                         for(int j = i; j < argnum - 1; j++){
@@ -349,7 +349,7 @@ void Piper(char *cmd,char* args[], int argnum, int& Stop) {
                                         dup(newstdout);
                                         close(newstdout);
 										//free(args[i]);
-                                        //args[i] = NULL;
+                                        args[i] = NULL;
                                 }
                                 else if(strcmp(args[i], "<") == 0){
 										//cout<<")))<((("<<endl;
@@ -357,8 +357,8 @@ void Piper(char *cmd,char* args[], int argnum, int& Stop) {
                                         close(0);
                                         dup(newstdin);
                                         close(newstdin);
-										//free(args[i]);
-                                        //args[i] = NULL;
+										free(args[i]);
+                                        args[i] = NULL;
                                 }
                         }
                         execvp(cmd, args);
