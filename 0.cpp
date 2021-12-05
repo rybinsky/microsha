@@ -1,21 +1,25 @@
-#include <unistd.h>     
-#include <sys/types.h>  
-#include <sys/wait.h>   
-#include <signal.h>     
-#include <iostream>
+#include <stdio.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <fnmatch.h>
+#include <sys/dir.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/resource.h>
+#include <sys/time.h>
+#include <time.h>
+#include <algorithm>
 #include <vector>
 #include <string>
-#include <cstring>
-#include <stdio.h>
-#include <cstdlib>
-#include <sys/stat.h> 
-#include <fcntl.h> 
+#include <map>
 #include <utility>
-#include <algorithm>
-#include <dirent.h>
+#include <string.h>
+#include <iostream>
 #include <fstream>
-#include <sstream>
-#include <utility>
 #include "algorithm_dfa.cpp"
 
 using namespace std;
@@ -30,117 +34,198 @@ string pumping(const string& str);
 bool checking(const string& str, const string& path);
 template <typename T>
 vector<T> Unification(const vector<T>& m1,const vector<T>& m2);
-vector<pair<string, int>> Way_to_ways(const string& path, const string& expr);
-vector<pair<string, int>> Possible_ways(const vector<string>& mass);
-vector<string> Char_to_Str(char** args);
+vector<string> Way_to_ways(const string& path, const string& expr);
+vector<string> Possible_ways(const vector<string>& mass);
 vector<string> Tokenizator(string a);
-void Ls_exec(const vector<string>& argums);
-int LS(char** args);
-pair<char**, int> Parse_Line(char* line);
-void Piper(char *cmd,char* args[], int argnum, int& Stop);
-void Execution(char* cmd, char* args[], int argnum, int& Stop);
-void loop();
+void Parse_Line(string& line, vector<string>& ans);
+vector<string> Ways(vector<string> args);
+int Execution(vector<string> &args);
+void InOutStreams(vector<string> &args);
+void Piping(const vector< vector<char *>> &argsCharVector, int NumberCmd, int CountCmds, int parentPid);
+int loop();
 //======================================================//
 int main(int argc, char** argv) {
 	loop();
 	return 0;
 }
 //=====================================================//
-//главный цикл
-void loop() {
-	char** args;
-	int CountArgs;
+//main loop
+int loop() {
 	string Line;
-	char* line;
-	int Stop = 0;
-
-	while(!Stop) {
-		int p = 0;
+	
+	while(1) {
 		pid_t uid = getuid();
-		if (p == 0) {
-			char str[100];
-			getcwd(str, 100 * sizeof(char));
-			if (uid == 0) {
-				cout << "[" << str << "]" << "! ";
-			}
-			else {
-				cout << "[" << str << "]" << "> ";
-			}
+		char curDir[1000];
+		
+		getcwd(curDir, 1000 * sizeof(char));
+		if (uid == 0) { cout << "[" << curDir << "]" << "! "; }
+		else { cout << "[" <<  curDir << "]" << "> "; }
+		
+		getline(cin, Line);
+		if (cin.eof() && (Line.length() == 0)) { 
+			cout << endl;
+			break;
 		}
-		if(!getline(cin,Line) ) { Stop = 1; }
+		if (cin.eof()) return 0;
 		if (Line.size() == 0) continue;
-		line = (char*)malloc((Line.length() + 1) * sizeof(char));
-		//cout<<"line"<<" "<<(Line.length() + 1)<<"bytes"<<' '<<(void*)line<<endl;//выделил память под строку line
-        strcpy(line, Line.c_str());
 
-		//pair<char**, int> Tokens = Parse_Line(line);
-		//args = Tokens.first;
-		//CountArgs = Tokens.second;
-		string buf; 
-		stringstream ss(line);
-		vector<char*> tokens;
-		char *temp;
+		vector<string> args;
+		Parse_Line(Line, args);
+		if (args.size() > 0 && args[0] == "exit") {
+			return 0;
+		}	
+		
+		args = Ways(args);
 
-		while (ss >> buf) {
-			temp = (char*)malloc((buf.length() + 1) * sizeof(char));
-			//cout<<"temp"<<" "<<(buf.length() + 1)<<"bytes"<<' '<<(void*)temp<<endl;
-			//выделяю память под один токен, всегда разной длины, тк buf разный
-			strcpy(temp,buf.c_str());
-			tokens.push_back(temp);
-			//cout<<temp<<' '<<&temp<<endl;
-		}
-		char** argv = (char	**)malloc((tokens.size() + 1) * sizeof(char*));
-		//cout<<"argv"<<" "<<(tokens.size() + 1)<<"bytes"<<' '<<(void*)argv<<endl;
-		//выделил память t.size()+1 под массив указателей
-		for (int i = 0; i < tokens.size(); i++ ) {
-			argv[i] = tokens[i];
-			//cout<<argv[i]<< ' '<<&argv[i]<<endl;
-			//cout<<tokens[i]<<' '<<&tokens[i]<<endl;
-		}
-		//cout<< temp << &temp << endl;
-		argv[tokens.size()] = NULL;//последний t.size + 1-й элемент на NULL
-		//cout<<"last NULL address "<< (void*)argv[tokens.size()]<<endl;
-		CountArgs = tokens.size();
-		//cout<<"CountArgs="<<CountArgs<<endl;
-		args = argv;
-		//cout<<temp<<' '<<&temp<<endl;
-		Execution(args[0],args, CountArgs, Stop);
-		//cout<<"Success"<<endl;
-		//cout<<line<<' ';
-		free(line);//очистил строку lline
-		//cout<<(void*)line<<endl;
-		//cout<<"Line empty"<< endl;
-		for(int i = 0; i < CountArgs + 1; i++) {
-			//cout<<"args[i]"<<' '<<(void*)args[i]<<endl;
-			if (args[i] != NULL) free(args[i]);//очищаю по кажд указ из массива
-		}//очистил t.size элементов, если пропиу еще +1, то ничего не изм-ся
-		//cout<<"argv"<<' '<<(void*)argv<<endl;
-		free(args);//очистил массив указателей
-		//cout<<"Args empty"<<endl;
+		Execution(args);
 	}
+	return 0;
+}
+//========================================================//
+int Execution(vector<string> &args) {
+	int pid = fork();
+		
+		if (pid < 0) perror("fork");
+		if (pid == 0) { //child
+			InOutStreams(args);
+		} else {
+			wait(0);
+		}
+
+		if (pid == 0) {
+			if ((args.size() > 0) && (args[0] == "time")) {
+				struct rusage r_usage, rr_usage;
+				struct timeval sys_start, sys_end, u_start, u_end, 
+											real_start, real_end;
+				vector<char *> SingleCmd;
+				for (int j = 1; j < args.size(); j++) {
+					SingleCmd.push_back((char *)args[j].c_str());
+				}
+				SingleCmd.push_back(NULL);
+				pid_t parent_pid = getpid();
+				pid_t newpid = fork();
+				if (newpid < 0) perror("fork");
+				if (newpid == 0) {
+					if (execvp(SingleCmd[0], &SingleCmd[0]) < 0) {
+						perror("execvp");
+						_exit(0);
+					}
+				} else {
+					gettimeofday(&real_start, NULL);
+					getrusage(RUSAGE_CHILDREN, &r_usage);
+					wait(0); 
+					getrusage(RUSAGE_CHILDREN, &rr_usage);
+					gettimeofday(&real_end, NULL);
+					sys_start = r_usage.ru_stime;
+					u_start = r_usage.ru_utime;
+					sys_end = rr_usage.ru_stime;
+					u_end = rr_usage.ru_utime;
+					long long sys_sec = sys_end.tv_sec - sys_start.tv_sec;
+					long long sys_usec = (sys_end.tv_usec - sys_start.tv_usec) / 1000;
+					long long u_sec = u_end.tv_sec - u_start.tv_sec;
+					long long u_usec = (u_end.tv_usec - u_start.tv_usec) / 1000;
+					long long real_sec = real_end.tv_sec - real_start.tv_sec;
+					long long real_usec = (real_end.tv_usec - real_start.tv_usec) / 1000;
+					cout << endl;
+					printf("real	  [%ld.%03lds]\n", real_sec, real_usec);
+					printf("user      [%ld.%03lds]\n", u_sec, u_usec);
+					printf("sys       [%ld.%03lds]\n", sys_sec, sys_usec);
+				}
+				_exit(0);
+			}
+		} else {
+			wait(0);
+		}
+		//cd 	
+		if (args[0] == "cd") {
+			if(args.size() == 1){
+                fprintf(stderr, "Expected argument to \"cd\"\n");
+            }
+            else{
+                chdir(args[1].c_str());
+            }
+			return 0;
+		}
+
+		if (pid == 0) { // Child	
+			if (args.size() == 0) _exit(0);
+			if (args[0] == "|") _exit(0);
+			if (args[args.size() - 1] == "|") _exit(0);
+			int i = 0;
+			int lastIndex = -1;
+			int CountCmds = 1;
+			vector<vector<char*>> argsCharVector;
+			while (i < args.size()) {
+				if ((args[i] != "|") && (i+1 < args.size())) {
+					i++;
+					continue;
+				}
+				if (i+1 == args.size()) i++;
+				vector<char*> SingleCmd;
+				for (int j = lastIndex+1; j < i; j++) { // pipe vector
+					SingleCmd.push_back((char *)args[j].c_str());
+				}
+				lastIndex = i;
+				SingleCmd.push_back(NULL);
+				argsCharVector.push_back(SingleCmd);
+
+				if (i != args.size()) CountCmds++;
+				i++;
+			}
+			
+			if (CountCmds > 0) {
+				Piping(argsCharVector, 1, CountCmds, pid);
+			}
+		} else { // Parent
+			wait(0);
+		}
+	return 0;
 }
 //=====================================================//
-pair<char**, int> Parse_Line(char* line) {
-    string buf; 
-    stringstream ss(line);
-    vector<char*> tokens;
-	char *temp;
+vector<string> Ways(vector<string> args){
+	vector<string> temp_args;
+	for(int i = 0; i < args.size(); i++){
+		if (args[i].find("*") != args[i].npos || args[i].find("?") != args[i].npos){
 
-    while (ss >> buf) {
-		temp = (char*)malloc((buf.length() + 1) * sizeof(char));
-        strcpy(temp,buf.c_str());
-        tokens.push_back(temp);
-		//cout<<temp<<' '<<&temp<<endl;
-    }
-    char** argv = (char**)malloc((tokens.size() + 1) * sizeof(char*));
-    for (int i = 0; i < tokens.size(); i++ ) {
-      	argv[i] = tokens[i];
-		//cout<<argv[i]<< ' '<<&argv[i]<<endl;
-		//cout<<tokens[i]<<' '<<&tokens[i]<<endl;
-    }
-	//cout<< temp << &temp << endl;
-	argv[tokens.size()] = NULL;
-	return {argv, tokens.size()};
+			vector<string> folders = Tokenizator(args[i]);
+			vector<string> ans;
+			ans = Possible_ways(folders);
+			
+			for(int j=0; j < i; j++){
+				temp_args.push_back(args[j]);
+			}
+			for(auto i : ans){
+				temp_args.push_back(i);
+			}
+			for(int j = i + 1; j < args.size(); j++){
+				temp_args.push_back(args[j]);
+			}		
+
+		} else {		
+			temp_args.push_back(args[i]);
+		}
+	}
+	return temp_args;
+}
+//=====================================================//
+void Parse_Line(string& str, vector<string>& ans) {
+	str = ' ' + str;
+	int i = 1;
+	while ((i < str.length()) && ((str[i] == ' ') || (str[i] == '\t'))) i++; 
+	while (i < str.length()) {
+		int start = i;
+		while (1) {
+			if ((i < str.length()) && (str[i] != ' ') && (str[i] != '\t')) {
+				i++;
+				continue;
+			} else {
+				break;
+			}
+		}
+		ans.push_back(str.substr(start, i - start));
+		while ((i < str.length()) && ((str[i] == ' ') || (str[i] == '\t'))) i++;
+	}
+	return; 
 }
 //=====================================================//
 vector<string> Tokenizator(string a) {
@@ -164,305 +249,124 @@ vector<string> Tokenizator(string a) {
 	return tokens;
 }
 //=====================================================//
-vector<string> Char_to_Str(char** args) {
-	vector<string> ans;
-	while (*args != NULL) {
-		ans.push_back(*args);
-		args++;
-	}
-	return ans;
-}
-//=====================================================//
-void Execution(char* cmd, char* args[], int argnum, int& Stop) {
-	int pipes = 0;
+void InOutStreams(vector<string> &args) {
+	int i = 0;
+	bool Changed = false;
 
-    for(int i = 0; i < argnum; i++){
-		if(strcmp(args[i], "|") == 0) { pipes = 1; }
-    }
+	while (i < args.size()) { 
+		Changed = false;
 
-	if (pipes) {
-		//cout<<"piper in Exec"<<endl;
-		for(int i = 0; i < argnum; i++) {
-			if(strcmp(args[i], "|") == 0) {
-				free(args[i]);
-               	args[i] = NULL;
-                char* right[argnum - i];
-                int c = 0;
-                for(int j = i; j < argnum - 1; j++) {
-	                right[j - i] = args[j + 1];
-					//cout<< right[j - i]<<endl;
-                    c++;
-                }
-                right[c] = NULL;
-                int p[2];
-                pipe(p);
-                pid_t lpid = fork();
-                if(lpid == 0){//left (child)
-					dup2(2,1);
-                    dup2(p[1], STDOUT_FILENO);
-					//cout<<"0000000"<<endl;
-                    execvp(cmd, args);
-                }
-                else {//right (parent)
-					pid_t rpid = fork();
-					close(p[1]);
-					if(rpid == 0){ //right child
-						dup2(2,1);
-                    	dup2(p[0], STDIN_FILENO);
-
-                    	Piper(right[0], right, c, Stop);
-						close(p[1]);
-					} else { //parent
-						waitpid(rpid, 0, 0);
-					}
-                }
-                break;
+		if ((args[i].find('<') != args[i].npos) || 
+			(args[i].find('>') != args[i].npos)) {
+			Changed = true;
+			int pos = (args[i].find('>') == args[i].npos) ? args[i].find('<') : args[i].find('>');
+			bool isOutput = (args[i].find('>') == args[i].npos) ? false : true;
+			int j = i;
+			string substr1 = args[j].substr(0, pos);
+			string substr2 = args[j].substr(pos + 1, args[j].length() - pos - 1);
+			
+			bool substr3exists = (j == args.size() - 1) ? false : true;
+			string substr3 = "";
+			if (substr3exists) substr3 = args[j + 1];
+			//cout << "i = " << i << ": " << substr1 << " " << substr2 << " " << substr3 << endl;
+			if (((substr1 != "0") && (substr1 != "") && (!isOutput)) || ((substr1 != "1") && (substr1 != "2") && (substr1 != "") && (isOutput))) {
+				args.insert(args.begin() + j, substr1);
+				substr1 = "";
+				j++; //
 			}
-		}
-    }
-	else{
-        if(strcmp(cmd, "cd") == 0) {
-            if(args[1] == NULL){
-				chdir("/");
-                //fprintf(stderr, "Expected argument to \"cd\"\n");
-            }
-            else{
-                chdir(args[1]);
-            }
-        }
-		else 
-		if(strcmp(cmd, "ls") == 0) {
-            LS(args);
-        }
-        else { //fork
-      		pid_t childID = fork();
-      		if(childID < 0) {
-        		perror("Error when forked");
-				Stop = 1;
-      		}
-      		else 
-			if(childID == 0) { //Child process
-                for(int i = 0; i < argnum; i++) {
-                    if(strcmp(args[i], ">") == 0) {
-                        int newstdout = open(args[i + 1], O_WRONLY | O_CREAT , S_IRWXU | S_IRWXG | S_IRWXO);
-                        close(1);
-                        dup(newstdout);
-                        close(newstdout);
-						free(args[i]);
-                        args[i] = NULL;
-                    }
-                    else if(strcmp(args[i], "<") == 0){
-						//cout<<")))<((("<<endl;
-                        int newstdin = open(args[i+1], O_RDONLY);
-						//cout<<"((()))"<<endl;
-                        close(0);
-                    	dup(newstdin);
-                    	close(newstdin);
-						free(args[i]);
-                        args[i] = NULL;
-                    }
-                }
-        		execvp(cmd, args);
-				//cout<<"Perrorrrrrrrrrrrrrrrrrrrrrrrrrr"<<endl;
-        		perror(cmd); //when there is an error
-				Stop = 1;
-      		}
-			else {
-				if (waitpid(childID, 0, 0) < 0) {//parent process
-          			Stop = 1;
-	  				perror("Error when waiting for child");
-        		}
-      	  	}
-    	  }
-    }
-}
-//=====================================================//
-void Piper(char *cmd,char* args[], int argnum, int& Stop) {
-    int pipes = 0;
-	//cout<<"PIPER"<<endl;
-    for(int i = 0; i < argnum; i++){
-        if(strcmp(args[i], "|") == 0) {pipes = 1; }
-    }
-    
-	if(pipes) {
-        for(int i = 0; i < argnum; i++){
-                if(strcmp(args[i], "|") == 0){
-						free(args[i]);
-                        args[i] = NULL;
-                        char* right[argnum - i];
-                        int c = 0;
-                        for(int j = i; j < argnum - 1; j++){
-                                right[j - i] = args[j + 1];
-								//cout<< right[j - i]<<endl;
-                                c++;
-                        }
-                        right[c] = NULL;
-                        int p[2];
-                        pipe(p);
-                        pid_t lpid = fork();
-                        if(lpid == 0) {//left (child)
-                            dup2(2, 1);
-                            dup2(p[1], STDOUT_FILENO);
-                            execvp(cmd, args);
-                        }
-                        else {//right (parent)
-                            pid_t rpid = fork();
-                            close(p[1]);
-                            if(rpid == 0) { //right child
-                                dup2(2, 1);
-                                dup2(p[0], STDIN_FILENO);
-                                Piper(right[0], right, c, Stop);
-                                close(p[1]);
-                            } else { //parent
-								waitpid(rpid, 0, 0);
-							}
-						}
-                        break;
-                }
-        }
-    }
-    else {
-        if(strcmp(cmd, "cd") == 0){
-            if(args[1] == NULL){
-                fprintf(stderr, "Expected argument to \"cd\"\n");
-            }
-            else{
-                chdir(args[1]);
-            }
-        }
-		else 
-		if(strcmp(cmd, "ls") == 0) {
-            LS(args);
-        }
-        else{ //forking
-            pid_t childID = fork();
-            if(childID < 0){
-                perror("Error when forked");  
-				Stop = 1;               
-            }
-            else 
-			if(childID == 0){ //Child process
-                        for(int i = 0; i < argnum; i++){
-                                if(strcmp(args[i], ">") == 0){
-                                        int newstdout = open(args[i + 1], O_WRONLY | O_CREAT , S_IRWXU | S_IRWXG | S_IRWXO);
-                                        close(1);
-                                        dup(newstdout);
-                                        close(newstdout);
-										//free(args[i]);
-                                        args[i] = NULL;
-                                }
-                                else if(strcmp(args[i], "<") == 0){
-										//cout<<")))<((("<<endl;
-                                        int newstdin = open(args[i + 1], O_RDONLY);
-                                        close(0);
-                                        dup(newstdin);
-                                        close(newstdin);
-										free(args[i]);
-                                        args[i] = NULL;
-                                }
-                        }
-                        execvp(cmd, args);
-						//cout<<"Perrorrrrrrrrrrrrrrrrrrrrrrrrrr"<<endl;
-                        perror(cmd); //when there is an error
-						Stop = 1;
-            }
-			else{
-				if (waitpid(childID, 0, 0) < 0) {//parent process
-          			Stop = 1;
-	  				perror("Error when waiting for child");
-        		}
-      	  	}
-            
-        }
-    }
-	//cout<<"End PIPER"<<endl;
-	Stop = 1;
-}
-//=====================================================//
-int LS(char** args) {
-
-	vector<string> argums = Char_to_Str(args);
-
-	if (argums.size() == 1 || argums.back()[0] == '-') {
-		Ls_exec(argums);
-		return 1;
-	}
-	else {
-		vector<string> folders = Tokenizator(argums.back());
-		vector<pair<string, int>> ans;
-		ans = Possible_ways(folders);
-
-		for(auto i : ans ) {
-			if (i.second == 0) {
-				argums.back() = i.first;
-				Ls_exec(argums);
+			if (substr1 == "") {
+				substr1 = "0";
+				if (isOutput) substr1 = "1";
+			}  
+		
+			if (substr2 == "") {
+				substr2 = substr3;
+				args.erase(args.begin() + j + 1);
 			}
-		}
-		for(auto i : ans) {
-			if (i.second == 1) {
-				argums.back() = i.first;	
-				cout << argums.back() << ':' << endl;	
-				Ls_exec(argums);
+			args.erase(args.begin()+j);
+			
+			close(stoi(substr1));
+			int redirectTo = -1;
+			if (isOutput) {
+				redirectTo = open(substr2.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
 			} else {
-				continue;
+				redirectTo = open(substr2.c_str(), O_RDONLY, 0666);
 			}
+			if (redirectTo < 0) perror("open");
+			break;
+		}
+		i++;
+	}
+	if (Changed) InOutStreams(args);
+}
+void Piping(const vector<vector<char*>>& argsCharVector, int NumberCmd, int CountCmds, int parentPid) {
+	if (NumberCmd == CountCmds) { 
+		if (execvp(argsCharVector[CountCmds - NumberCmd][0], &argsCharVector[CountCmds - NumberCmd][0]) < 0) { //1st command
+			write(2, argsCharVector[CountCmds - NumberCmd][0], strlen(argsCharVector[CountCmds - NumberCmd][0]));
+			string err = ": command not found\n";
+			write(2, err.c_str(), err.length());
+			//perror("execvp");
+			_exit(0);
+		}
+		return;		
+	}
+	int fd[2];
+	if (pipe(fd) < 0) perror("pipe");
+	pid_t newpid = fork();
+	if (newpid < 0) perror("fork");
+	if (newpid == 0) {
+		close(1);
+		int fd_1 = dup(fd[1]);
+		Piping(argsCharVector, NumberCmd+1, CountCmds, newpid);
+	} else {
+		close(0);
+		close(fd[1]);
+		int fd_0 = dup(fd[0]);
+		if (execvp(argsCharVector[CountCmds - NumberCmd][0], &argsCharVector[CountCmds - NumberCmd][0]) < 0) {
+			write(2, argsCharVector[CountCmds - NumberCmd][0], strlen(argsCharVector[CountCmds - NumberCmd][0]));
+			string err = ": command not found\n";
+			write(2, err.c_str(), err.length());
+			//perror("execvp");
+			_exit(0);
 		}
 	}
-	return 1;
+	return;
 }
 //=====================================================//
-void Ls_exec(const vector<string>& argums) {
-	vector<char*> args0; 
-	for (size_t i = 0; i < argums.size(); ++i) {
-		args0.push_back((char*)argums[i].c_str());
-	}
-	args0.push_back(nullptr);
-	pid_t pid;
-	pid = fork();
-	if (pid == 0) {
-		execvp(args0[0], &args0[0]);
-		perror(args0[0]);
-		exit(0);
-	}
-	else if (pid > 0) {
-		wait(0);
-		}
-}
-//=====================================================//
-vector<pair<string, int>> Possible_ways(const vector<string>& mass) {
+vector<string> Possible_ways(const vector<string>& mass) {
 
-	vector<pair<string, int>> ways;
+	vector<string> ways;
 
 	if(mass[0] == "/") {
-		ways.push_back({"/", 0});
+		ways.push_back("/");
 	} else  {
-		ways.push_back({".", 0});
+		ways.push_back(".");
 	}
 
 	for(int i = 0 ; i < mass.size() ; i++) {
-		vector<pair<string, int>> ways_temp;
-		vector<pair<string, int>> temp;
+		vector<string> ways_temp;
+		vector<string> temp;
 		string expr = pumping(mass[i]);
 		
 		if( mass[i] != "/" && mass[i] != "." && mass[i] != "*") {
 			for(int j = 0 ; j < ways.size() ;++j) {
-				temp = Way_to_ways(ways[j].first, expr);
+				temp = Way_to_ways(ways[j], expr);
 				ways_temp = Unification(ways_temp, temp);
 			}
 			ways = ways_temp;
 		}else if (mass[i] == "*") {
-			vector<pair<string, int>> temp;
+			vector<string> temp;
 			for(auto i : ways){
                 DIR *dir;
                 struct dirent *de;
-                dir = opendir(i.first.c_str());
+                dir = opendir(i.c_str());
                 while(dir){
                     de = readdir(dir);
                     if (!de) break;
                     if (de->d_name[0] != '.' && de->d_type == 4) {
-                        temp.push_back({i.first + '/' + (string)de->d_name, 1});
+                        temp.push_back(i + '/' + (string)de->d_name);
                     }else if (de->d_name[0] != '.' && de->d_type == 8) {
-						temp.push_back({i.first + '/' + (string)de->d_name, 0});
+						temp.push_back(i + '/' + (string)de->d_name);
 					}
                 }
                 closedir(dir);                
@@ -495,9 +399,9 @@ string pumping(const string& str) {
 	return temp;
 }
 //=====================================================//
-vector<pair<string, int>> Way_to_ways(const string& path, const string& expr) {
+vector<string> Way_to_ways(const string& path, const string& expr) {
     
-    vector<pair<string, int>> res;
+    vector<string> res;
 
     DIR *dir;
     struct dirent *de;
@@ -507,12 +411,9 @@ vector<pair<string, int>> Way_to_ways(const string& path, const string& expr) {
         if (!de) break;
 		if(de->d_name[0] != '.' && checking(expr, de->d_name)) {
           if(path == "/") {;
-		    res.push_back({path +(string)de->d_name, 0});
+		    res.push_back(path +(string)de->d_name);
 		  } else {
-            if (de->d_type == 4) 
-				res.push_back({path + "/" +(string)de->d_name, 0});
-			else
-				res.push_back({path + "/" +(string)de->d_name, 1});
+				res.push_back(path + "/" +(string)de->d_name);
 		  }
         }
     }
